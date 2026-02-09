@@ -16,10 +16,14 @@ export const apiClient = axios.create({
   timeout: 30000, // 30秒超时
 })
 
-// 请求拦截器（已移除token逻辑，因为不需要登录）
+// 请求拦截器：自动添加 token
 apiClient.interceptors.request.use(
   (config) => {
-    // 不再需要添加token
+    // 从 localStorage 获取 token 并添加到请求头
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   (error) => {
@@ -41,7 +45,15 @@ apiClient.interceptors.response.use(
         return Promise.reject(new Error('网络连接失败，请检查后端服务是否运行（http://localhost:8000）'))
       }
     }
-    // 已移除401错误处理，因为不需要登录
+    // 处理 401 未授权错误：token 失效时尝试重新登录
+    if (error.response?.status === 401) {
+      const token = localStorage.getItem('token')
+      if (token) {
+        // Token 失效，清除并尝试访客登录
+        localStorage.removeItem('token')
+        // 不在这里自动登录，让调用者处理
+      }
+    }
     return Promise.reject(error)
   }
 )

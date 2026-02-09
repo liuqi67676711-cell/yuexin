@@ -11,8 +11,9 @@ from sqlalchemy import func
 from typing import List, Dict, Tuple, Optional, Set
 from pydantic import BaseModel
 from app.db.database import get_db
-from app.db.models import Book, UserPreference, Bookshelf
+from app.db.models import Book, UserPreference, Bookshelf, User
 from app.api.books import BookResponse
+from app.api.auth import get_current_user_optional
 from app.services.llm import LLMService
 
 router = APIRouter()
@@ -212,13 +213,13 @@ async def get_everyone_watching(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=50),
     refresh: bool = Query(False, description="重新推荐时传 True，增加随机性"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """推荐你看 - 个性化推荐（新用户：评分+热度；有书架：个性化+评分+热度）"""
+    """推荐你看 - 个性化推荐（新用户：评分+热度；有书架：个性化+评分+热度，支持访客登录）"""
     try:
-        from app.api.agent import ensure_anonymous_user
-        anonymous_user = ensure_anonymous_user(db)
-        user_id = anonymous_user.id if anonymous_user else 1
+        from app.api.agent import get_current_user_id
+        user_id = get_current_user_id(db, current_user)
 
         not_interested_ids: Set[int] = set()
         try:

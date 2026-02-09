@@ -13,7 +13,9 @@ from app.db.models import (
     ChatSession as ChatSessionModel,
     ChatSessionSummary,
     UserInterestFact,
+    User,
 )
+from app.api.auth import get_current_user_optional
 from app.services.llm import LLMService
 
 router = APIRouter()
@@ -43,9 +45,19 @@ async def get_llm_test():
     return result
 
 
-# 使用固定的匿名用户ID（所有用户共享）
+# 使用固定的匿名用户ID（向后兼容）
 ANONYMOUS_USER_ID = 1
 AGENT_NAME = "苏童童"
+
+
+def get_current_user_id(db: Session, current_user: Optional[User] = None) -> int:
+    """获取当前用户ID，如果没有登录则使用匿名用户"""
+    if current_user:
+        return current_user.id
+    
+    # 如果没有登录，使用匿名用户（向后兼容）
+    anonymous_user = ensure_anonymous_user(db)
+    return anonymous_user.id if anonymous_user else 1
 
 
 class ChatMessageRequest(BaseModel):
@@ -206,18 +218,12 @@ def ensure_anonymous_user(db: Session):
 @router.post("/sessions", response_model=ChatSessionResponse)
 async def create_session(
     request: CreateSessionRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """创建新的对话会话（无需登录）"""
+    """创建新的对话会话（支持访客登录）"""
     try:
-        anonymous_user = ensure_anonymous_user(db)
-        if not anonymous_user:
-            raise HTTPException(
-                status_code=500,
-                detail="无法初始化匿名用户，请检查数据库"
-            )
-        
-        user_id = anonymous_user.id
+        user_id = get_current_user_id(db, current_user)
         
         session = ChatSessionModel(
             user_id=user_id,
@@ -245,15 +251,12 @@ async def create_session(
 @router.get("/sessions", response_model=List[ChatSessionResponse])
 async def get_sessions(
     book_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """获取所有对话会话（无需登录）"""
+    """获取所有对话会话（支持访客登录）"""
     try:
-        anonymous_user = ensure_anonymous_user(db)
-        if not anonymous_user:
-            return []  # 如果没有用户，返回空列表
-        
-        user_id = anonymous_user.id
+        user_id = get_current_user_id(db, current_user)
         
         query = db.query(ChatSessionModel).filter(
             ChatSessionModel.user_id == user_id
@@ -282,14 +285,11 @@ async def get_sessions(
 async def update_session(
     session_id: int,
     request: UpdateSessionRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """更新会话名称（无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    
-    user_id = anonymous_user.id
+    """更新会话名称（支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     session = db.query(ChatSessionModel).filter(
         ChatSessionModel.id == session_id,
@@ -309,14 +309,11 @@ async def update_session(
 @router.delete("/sessions/{session_id}")
 async def delete_session(
     session_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """删除会话（会同时删除所有消息，无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    
-    user_id = anonymous_user.id
+    """删除会话（会同时删除所有消息，支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     session = db.query(ChatSessionModel).filter(
         ChatSessionModel.id == session_id,
@@ -341,13 +338,11 @@ class SummarizeResponse(BaseModel):
 @router.post("/sessions/{session_id}/summarize", response_model=SummarizeResponse)
 async def summarize_session(
     session_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """生成会话摘要（幂等：已有摘要则返回）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    user_id = anonymous_user.id
+    """生成会话摘要（幂等：已有摘要则返回，支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
 
     session = db.query(ChatSessionModel).filter(
         ChatSessionModel.id == session_id,
@@ -454,15 +449,12 @@ def _get_session_summary_and_interests(db: Session, session_id: int, user_id: in
 async def chat_with_agent(
     chat_data: ChatMessageRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """与 AI 书童对话（无需登录）"""
+    """与 AI 书童对话（支持访客登录）"""
     try:
-        anonymous_user = ensure_anonymous_user(db)
-        if not anonymous_user:
-            raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-        
-        user_id = anonymous_user.id
+        user_id = get_current_user_id(db, current_user)
         
         user_message = chat_data.message
         session_id = chat_data.session_id
@@ -612,14 +604,11 @@ def _message_to_response(msg) -> dict:
 async def get_session_messages(
     session_id: int,
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """获取会话的消息记录（无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    
-    user_id = anonymous_user.id
+    """获取会话的消息记录（支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     # 验证会话所有权
     session = db.query(ChatSessionModel).filter(
@@ -640,14 +629,11 @@ async def get_session_messages(
 @router.delete("/messages/{message_id}")
 async def delete_chat_message(
     message_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """删除单条对话记录（无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    
-    user_id = anonymous_user.id
+    """删除单条对话记录（支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     message = db.query(ChatMessageModel).filter(
         ChatMessageModel.id == message_id,
@@ -666,14 +652,11 @@ async def delete_chat_message(
 @router.delete("/sessions/{session_id}/messages")
 async def clear_session_messages(
     session_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """清空会话的所有消息（无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    
-    user_id = anonymous_user.id
+    """清空会话的所有消息（支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     # 验证会话所有权
     session = db.query(ChatSessionModel).filter(

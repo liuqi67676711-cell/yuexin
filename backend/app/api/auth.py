@@ -45,20 +45,36 @@ def get_current_user(
     db: Session = Depends(get_db)
 ) -> User:
     """获取当前用户"""
+    print(f"🔍 收到 token，长度: {len(token) if token else 0}, 前50字符: {token[:50] if token else 'None'}...")
     payload = decode_access_token(token)
     if payload is None:
+        print(f"❌ Token 解码失败")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的认证令牌"
         )
     
     user_id = payload.get("sub")
+    # 确保 user_id 是整数类型（JWT 可能返回字符串）
+    if isinstance(user_id, str):
+        try:
+            user_id = int(user_id)
+        except ValueError:
+            print(f"❌ user_id 无法转换为整数: {user_id}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="无效的认证令牌"
+            )
+    
+    print(f"🔍 验证 token，user_id: {user_id}, type: {type(user_id)}")
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
+        print(f"❌ 用户不存在: user_id={user_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在"
         )
+    print(f"✅ 用户验证成功: user_id={user_id}, username={user.username}")
     return user
 
 
@@ -182,34 +198,86 @@ async def guest_login(
     db: Session = Depends(get_db)
 ):
     """访客登录 - 自动创建账户"""
-    browser_id = request.browser_id
-    
-    # 检查是否已存在该浏览器ID的用户
-    guest_user = db.query(User).filter(
-        User.email == f"{browser_id}@guest.local"
-    ).first()
-    
-    if not guest_user:
-        # 创建新的访客用户
-        # 使用一个固定的密码hash（访客用户不需要密码）
-        dummy_password = "guest_no_password"
-        hashed_password = get_password_hash(dummy_password)
+    try:
+        browser_id = request.browser_id
+        print(f"🔍 访客登录请求，browser_id: {browser_id[:50]}...")  # 只打印前50个字符
         
-        guest_user = User(
-            email=f"{browser_id}@guest.local",
-            username=f"访客_{browser_id[-8:]}",  # 只显示最后8位
-            hashed_password=hashed_password,
-            agent_name="苏童童"
+        # 生成唯一的 email（限制长度，避免数据库约束问题）
+        # email 字段可能有长度限制，使用 hash 缩短
+        import hashlib
+        email_hash = hashlib.md5(browser_id.encode()).hexdigest()[:16]
+        guest_email = f"{email_hash}@guest.local"
+        print(f"🔍 生成的 guest_email: {guest_email}")
+        
+        # 检查是否已存在该浏览器ID的用户
+        guest_user = db.query(User).filter(
+            User.email == guest_email
+        ).first()
+        
+        if not guest_user:
+            # 创建新的访客用户
+            # 使用一个固定的密码hash（访客用户不需要密码）
+            dummy_password = "guest"
+            hashed_password = get_password_hash(dummy_password)
+            
+            # 生成唯一的 username（使用 email_hash 确保唯一性，限制长度）
+            guest_username = f"访客_{email_hash[:8]}"
+            
+            # 如果用户名已存在，添加随机后缀
+            existing_username = db.query(User).filter(User.username == guest_username).first()
+            if existing_username:
+                import random
+                guest_username = f"{guest_username}_{random.randint(1000, 9999)}"
+            
+            try:
+                guest_user = User(
+                    email=guest_email,
+                    username=guest_username,
+                    hashed_password=hashed_password,
+                    agent_name="苏童童"
+                )
+                db.add(guest_user)
+                db.commit()
+                db.refresh(guest_user)
+                print(f"✅ 成功创建访客用户: id={guest_user.id}, email={guest_email}, username={guest_username}")
+            except Exception as create_error:
+                db.rollback()
+                print(f"❌ 创建用户失败: {create_error}")
+                import traceback
+                traceback.print_exc()
+                raise
+        else:
+            # 如果用户已存在，更新 browser_id 映射（可选：存储在用户表的某个字段）
+            pass
+    
+        # 生成token
+        access_token = create_access_token(data={"sub": guest_user.id})
+        print(f"🔍 生成的 token，长度: {len(access_token)}, 前50字符: {access_token[:50]}...")
+        print(f"🔍 user_id: {guest_user.id}, type: {type(guest_user.id)}")
+        
+        # 将 User 对象转换为 UserResponse
+        user_response = UserResponse(
+            id=guest_user.id,
+            email=guest_user.email,
+            username=guest_user.username,
+            agent_name=guest_user.agent_name
         )
-        db.add(guest_user)
-        db.commit()
-        db.refresh(guest_user)
-    
-    # 生成token
-    access_token = create_access_token(data={"sub": guest_user.id})
-    
-    return GuestLoginResponse(
-        user=guest_user,
-        access_token=access_token,
-        token_type="bearer"
-    )
+        
+        return GuestLoginResponse(
+            user=user_response,
+            access_token=access_token,
+            token_type="bearer"
+        )
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        error_msg = f"访客登录失败: {str(e)}\n{error_trace}"
+        print(f"❌ {error_msg}")
+        # 同时输出到 stderr，确保日志能捕获
+        import sys
+        print(error_msg, file=sys.stderr)
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"访客登录失败: {str(e)}"
+        )

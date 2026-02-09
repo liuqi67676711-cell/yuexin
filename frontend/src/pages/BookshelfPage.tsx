@@ -6,6 +6,7 @@ import { Book } from '../api/books'
 import { booksAPI } from '../api/books'
 import { PenSquare, ArrowLeft } from 'lucide-react'
 import ConfirmDialog from '../components/ConfirmDialog'
+import OptimizedImage from '../components/OptimizedImage'
 
 const STATUS_LABELS: Record<BookshelfStatus, string> = {
   to_read: '想读',
@@ -80,19 +81,34 @@ export default function BookshelfPage() {
     const { id, status } = removeConfirm
     if (id == null || status == null) return
     setRemoveConfirm({ open: false, id: null, status: null })
+    
     if (status === 'dropped') {
+      // 彻底删除：直接从状态中移除
       try {
         await bookshelfAPI.removeFromBookshelf(id)
-        loadBookshelf()
+        setBookshelves((prev) => prev.filter((item) => item.id !== id))
       } catch (error) {
         console.error('移除失败:', error)
+        // 如果删除失败，重新加载以确保数据同步
+        loadBookshelf()
       }
     } else {
+      // 移入弃读：更新状态，如果当前筛选不是"全部"或"弃读"，则从列表中移除
       try {
         await bookshelfAPI.updateBookshelf(id, { status: 'dropped' })
-        loadBookshelf()
+        if (selectedStatus && selectedStatus !== 'dropped') {
+          // 如果当前筛选不是"弃读"，从列表中移除
+          setBookshelves((prev) => prev.filter((item) => item.id !== id))
+        } else {
+          // 如果当前筛选是"全部"或"弃读"，更新该项的状态
+          setBookshelves((prev) =>
+            prev.map((item) => (item.id === id ? { ...item, status: 'dropped' } : item))
+          )
+        }
       } catch (error) {
         console.error('移入弃读失败:', error)
+        // 如果更新失败，重新加载以确保数据同步
+        loadBookshelf()
       }
     }
   }
@@ -184,23 +200,20 @@ export default function BookshelfPage() {
                     className="bg-card border border-border rounded-lg p-3 hover:shadow-lg transition-shadow cursor-pointer relative group"
                     onClick={() => handleViewDetails(item.book.id)}
                   >
-                    <div className="w-full aspect-[2/3] rounded mb-2 bg-background border border-border flex items-center justify-center overflow-hidden relative">
-                      {item.book.cover_url ? (
-                        <img
-                          src={item.book.cover_url}
-                          alt={item.book.title}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : (
-                        <div className="text-center p-2">
-                          <div className="text-xs font-semibold text-foreground/30 mb-1 line-clamp-2">
-                            {item.book.title.length > 8 ? item.book.title.substring(0, 8) + '...' : item.book.title}
+                    <div className="w-full aspect-[2/3] rounded mb-2 overflow-hidden relative">
+                      <OptimizedImage
+                        src={item.book.cover_url}
+                        alt={item.book.title}
+                        className="w-full h-full"
+                        placeholder={
+                          <div className="text-center p-2">
+                            <div className="text-xs font-semibold text-foreground/30 mb-1 line-clamp-2">
+                              {item.book.title.length > 8 ? item.book.title.substring(0, 8) + '...' : item.book.title}
+                            </div>
+                            <div className="text-[10px] text-foreground/20">暂无封面</div>
                           </div>
-                          <div className="text-[10px] text-foreground/20">暂无封面</div>
-                        </div>
-                      )}
+                        }
+                      />
                       {/* 悬浮时显示记笔记按钮 - 居中显示在书籍封面上 */}
                       <button
                         onClick={(e) => {
@@ -249,23 +262,20 @@ export default function BookshelfPage() {
                         className="bg-card border border-border rounded-lg p-3 hover:shadow-lg transition-shadow cursor-pointer relative group"
                         onClick={() => handleViewDetails(item.book.id)}
                       >
-                        <div className="w-full aspect-[2/3] rounded mb-2 bg-background border border-border flex items-center justify-center overflow-hidden relative">
-                          {item.book.cover_url ? (
-                            <img
-                              src={item.book.cover_url}
-                              alt={item.book.title}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              decoding="async"
-                            />
-                          ) : (
-                            <div className="text-center p-2">
-                              <div className="text-xs font-semibold text-foreground/30 mb-1 line-clamp-2">
-                                {item.book.title.length > 8 ? item.book.title.substring(0, 8) + '...' : item.book.title}
+                        <div className="w-full aspect-[2/3] rounded mb-2 overflow-hidden relative">
+                          <OptimizedImage
+                            src={item.book.cover_url}
+                            alt={item.book.title}
+                            className="w-full h-full"
+                            placeholder={
+                              <div className="text-center p-2">
+                                <div className="text-xs font-semibold text-foreground/30 mb-1 line-clamp-2">
+                                  {item.book.title.length > 8 ? item.book.title.substring(0, 8) + '...' : item.book.title}
+                                </div>
+                                <div className="text-[10px] text-foreground/20">暂无封面</div>
                               </div>
-                              <div className="text-[10px] text-foreground/20">暂无封面</div>
-                            </div>
-                          )}
+                            }
+                          />
                           {/* 悬浮时显示记笔记按钮 - 居中显示在书籍封面上 */}
                           <button
                             onClick={(e) => {

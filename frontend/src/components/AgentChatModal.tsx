@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, Send, Bot, Edit2, Plus, Trash2 } from 'lucide-react'
+import { X, Send, Bot, Edit2, Plus, Trash2, Menu, ChevronLeft } from 'lucide-react'
 import { agentAPI, ChatMessage, ChatSession } from '../api/agent'
 import { showToast } from './ToastContainer'
 import { formatRelativeTime } from '../utils/relativeTime'
@@ -43,6 +43,27 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
   const [streamingDisplayedLength, setStreamingDisplayedLength] = useState(0)
 
   const streamingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  
+  // 移动端侧边栏展开/收起状态（移动端默认收起）
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  
+  // 检测是否为移动端
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768) // 768px 以下视为移动端
+      // 移动端默认收起侧边栏
+      if (window.innerWidth < 768) {
+        setIsSidebarOpen(false)
+      } else {
+        setIsSidebarOpen(true)
+      }
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+  
   // 逐步展示 AI 回复（约 50 字/秒，缓解等待焦虑）
   useEffect(() => {
     if (streamingMessageId == null || streamingFullText === '') return
@@ -321,6 +342,10 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
       setCurrentSessionId(session.id)
       setNewSessionName('')
       setIsCreatingSession(false)
+      // 移动端：创建会话后自动关闭侧边栏
+      if (isMobile) {
+        setIsSidebarOpen(false)
+      }
       showToast('对话已创建', 'success')
     } catch (error: any) {
       console.error('创建会话失败:', error)
@@ -509,19 +534,33 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
 
   return (
     <div 
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-2 md:p-4 bg-black/50 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
       <div 
-        className="bg-card border border-border rounded-xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl"
+        className="bg-card border border-border rounded-xl w-full max-w-4xl h-[90vh] md:h-[85vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 头部 */}
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center space-x-3 flex-1">
-            <Bot className="w-5 h-5 text-foreground" />
+        <div className="px-4 md:px-6 py-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center space-x-3 flex-1 min-w-0">
+            {/* 移动端：侧边栏切换按钮 */}
+            {isMobile && (
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="p-2 rounded-full hover:bg-background transition-colors flex-shrink-0"
+                title={isSidebarOpen ? "收起对话列表" : "展开对话列表"}
+              >
+                {isSidebarOpen ? (
+                  <ChevronLeft className="w-5 h-5 text-foreground" />
+                ) : (
+                  <Menu className="w-5 h-5 text-foreground" />
+                )}
+              </button>
+            )}
+            <Bot className="w-5 h-5 text-foreground flex-shrink-0" />
             {isEditingName ? (
-              <div className="flex items-center space-x-2 flex-1">
+              <div className="flex items-center space-x-2 flex-1 min-w-0">
                 <input
                   type="text"
                   value={agentName}
@@ -533,12 +572,12 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
                       setAgentName('苏童童')
                     }
                   }}
-                  className="flex-1 px-2 py-1 rounded bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  className="flex-1 px-2 py-1 rounded bg-background border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-purple-500/50 min-w-0"
                   autoFocus
                 />
                 <button
                   onClick={handleSaveAgentName}
-                  className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:opacity-90"
+                  className="px-3 py-1 text-sm bg-purple-500 text-white rounded hover:opacity-90 flex-shrink-0"
                 >
                   保存
                 </button>
@@ -547,19 +586,19 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
                     setIsEditingName(false)
                     setAgentName('苏童童')
                   }}
-                  className="px-3 py-1 text-sm border border-border rounded hover:bg-background"
+                  className="px-3 py-1 text-sm border border-border rounded hover:bg-background flex-shrink-0"
                 >
                   取消
                 </button>
               </div>
             ) : (
               <>
-                <h2 className="text-lg font-semibold text-foreground">
+                <h2 className="text-base md:text-lg font-semibold text-foreground truncate">
                   {agentName} AI 书童
                 </h2>
                 <button
                   onClick={() => setIsEditingName(true)}
-                  className="ml-2 p-1 rounded hover:bg-background transition-colors"
+                  className="ml-2 p-1 rounded hover:bg-background transition-colors flex-shrink-0"
                   title="编辑名称"
                 >
                   <Edit2 className="w-4 h-4 text-foreground/60" />
@@ -567,7 +606,7 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
               </>
             )}
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center flex-shrink-0">
             <button
               onClick={handleClose}
               className="p-2 rounded-full hover:bg-background transition-colors"
@@ -577,9 +616,25 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
           </div>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden relative">
+          {/* 移动端遮罩层：侧边栏展开时显示 */}
+          {isMobile && isSidebarOpen && (
+            <div
+              className="absolute inset-0 bg-black/30 z-[5] md:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+            />
+          )}
+          
           {/* 会话列表侧边栏 */}
-          <div className="w-64 border-r border-border bg-background/50 flex flex-col flex-shrink-0">
+          <div className={`
+            absolute md:relative
+            top-0 left-0 h-full
+            w-64 border-r border-border bg-background/95 md:bg-background/50 
+            flex flex-col flex-shrink-0 z-10
+            transition-transform duration-300 ease-in-out
+            ${isMobile ? (isSidebarOpen ? 'translate-x-0' : '-translate-x-full') : ''}
+            ${isMobile ? 'shadow-xl' : ''}
+          `}>
               <div className="p-4 border-b border-border">
                 <button
                   onClick={() => setIsCreatingSession(true)}
@@ -636,7 +691,13 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
                         ? 'bg-purple-500/20 border border-purple-500/50'
                         : 'bg-card border border-border hover:bg-background'
                     }`}
-                    onClick={() => setCurrentSessionId(session.id)}
+                    onClick={() => {
+                      setCurrentSessionId(session.id)
+                      // 移动端：选择会话后自动关闭侧边栏
+                      if (isMobile) {
+                        setIsSidebarOpen(false)
+                      }
+                    }}
                   >
                     {editingSessionId === session.id ? (
                       <div className="space-y-2">
@@ -713,16 +774,16 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
             </div>
 
           {/* 主对话区域 */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 w-full">
             {/* 当前会话标题 */}
             {currentSession && (
-              <div className="px-6 py-2 border-b border-border bg-background/30">
-                <p className="text-sm font-medium text-foreground">{currentSession.name}</p>
+              <div className="px-4 md:px-6 py-2 border-b border-border bg-background/30">
+                <p className="text-sm font-medium text-foreground truncate">{currentSession.name}</p>
               </div>
             )}
 
             {/* 消息列表 */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
               {messages.length === 0 ? (
                 proactiveCare ? (
                   <div className="flex justify-start">
@@ -747,18 +808,18 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
                     key={`${msg.id}-${msg.role}-${msg.created_at}`}
                     className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} group`}
                   >
-                    <div className="flex items-start space-x-2 max-w-[80%]">
+                    <div className="flex items-start space-x-2 max-w-[85%] md:max-w-[80%]">
                       {msg.role === 'agent' && (
-                        <Bot className="w-5 h-5 text-purple-500 mt-1 flex-shrink-0" />
+                        <Bot className="w-4 h-4 md:w-5 md:h-5 text-purple-500 mt-1 flex-shrink-0" />
                       )}
                       <div
-                        className={`rounded-lg px-4 py-2 ${
+                        className={`rounded-lg px-3 py-2 md:px-4 md:py-2 ${
                           msg.role === 'user'
                             ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
                             : 'bg-background border border-border'
                         }`}
                       >
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                        <p className="text-xs md:text-sm leading-relaxed whitespace-pre-wrap break-words">
                           {msg.role === 'agent' && streamingMessageId === msg.id ? (
                             <>
                               {streamingFullText.slice(0, streamingDisplayedLength)}
@@ -790,23 +851,23 @@ export default function AgentChatModal({ bookId, isOpen, onClose, initialSession
             </div>
 
             {/* 输入框 */}
-            <div className="px-6 py-4 border-t border-border">
+            <div className="px-4 md:px-6 py-4 border-t border-border">
               <div className="flex items-center space-x-2">
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
                   placeholder={currentSessionId ? "输入你的问题..." : "正在初始化对话..."}
-                  className="flex-1 px-4 py-2 rounded-lg bg-background border border-border text-foreground placeholder-foreground/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none"
+                  className="flex-1 px-3 md:px-4 py-2 rounded-lg bg-background border border-border text-foreground placeholder-foreground/40 focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none text-sm md:text-base"
                   rows={2}
                   disabled={isLoading}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || isLoading || !currentSessionId}
-                  className="p-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                  className="p-2 md:p-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex-shrink-0"
                 >
-                  <Send className="w-5 h-5" />
+                  <Send className="w-4 h-4 md:w-5 md:h-5" />
                 </button>
               </div>
             </div>

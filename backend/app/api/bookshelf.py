@@ -1,25 +1,27 @@
 """
-书架相关 API（无需登录版本）
+书架相关 API（支持访客登录版本）
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 from app.db.database import get_db
-from app.db.models import Bookshelf, Book, UserPreference
+from app.db.models import Bookshelf, Book, UserPreference, User
 from app.api.books import BookResponse
+from app.api.auth import get_current_user_optional
 
 router = APIRouter()
 
-# 使用固定的匿名用户ID（所有用户共享）
-ANONYMOUS_USER_ID = 1
 
-
-def ensure_anonymous_user(db: Session):
-    """确保匿名用户存在（从agent模块导入）"""
-    # 直接从agent模块导入，避免重复代码
-    from app.api.agent import ensure_anonymous_user as agent_ensure_anonymous_user
-    return agent_ensure_anonymous_user(db)
+def get_current_user_id(db: Session, current_user: Optional[User] = None) -> int:
+    """获取当前用户ID，如果没有登录则使用匿名用户"""
+    if current_user:
+        return current_user.id
+    
+    # 如果没有登录，使用匿名用户（向后兼容）
+    from app.api.agent import ensure_anonymous_user
+    anonymous_user = ensure_anonymous_user(db)
+    return anonymous_user.id if anonymous_user else 1
 
 
 class BookshelfItem(BaseModel):
@@ -50,14 +52,11 @@ class NotInterestedRequest(BaseModel):
 @router.get("/", response_model=List[BookshelfItem])
 async def get_bookshelf(
     status: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """获取用户书架（无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        return []  # 如果没有用户，返回空列表
-    
-    user_id = anonymous_user.id
+    """获取用户书架（支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     query = db.query(Bookshelf).filter(Bookshelf.user_id == user_id)
     
@@ -94,14 +93,11 @@ def _refresh_reading_profile_task(user_id: int):
 async def add_to_bookshelf(
     request: AddToBookshelfRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """添加书籍到书架（无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    
-    user_id = anonymous_user.id
+    """添加书籍到书架（支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     # 检查书籍是否存在
     book = db.query(Book).filter(Book.id == request.book_id).first()
@@ -152,14 +148,11 @@ async def update_bookshelf(
     bookshelf_id: int,
     request: UpdateBookshelfRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """更新书架项（无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    
-    user_id = anonymous_user.id
+    """更新书架项（支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     bookshelf = db.query(Bookshelf).filter(
         Bookshelf.id == bookshelf_id,
@@ -191,14 +184,11 @@ async def update_bookshelf(
 async def remove_from_bookshelf(
     bookshelf_id: int,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """从书架移除书籍（无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    
-    user_id = anonymous_user.id
+    """从书架移除书籍（支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     bookshelf = db.query(Bookshelf).filter(
         Bookshelf.id == bookshelf_id,
@@ -219,14 +209,11 @@ async def remove_from_bookshelf(
 @router.post("/not-interested")
 async def mark_not_interested(
     request: NotInterestedRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """标记不感兴趣（用于推荐反馈，无需登录）"""
-    anonymous_user = ensure_anonymous_user(db)
-    if not anonymous_user:
-        raise HTTPException(status_code=500, detail="无法初始化匿名用户")
-    
-    user_id = anonymous_user.id
+    """标记不感兴趣（用于推荐反馈，支持访客登录）"""
+    user_id = get_current_user_id(db, current_user)
     
     preference = UserPreference(
         user_id=user_id,
