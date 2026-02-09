@@ -1,7 +1,9 @@
 import axios from 'axios'
 
-// 使用相对路径，通过 Vite 代理访问后端
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+// API 基礎 URL 配置
+// - 開發環境：如果設置了 VITE_API_BASE_URL，使用該值；否則使用相對路徑（通過 Vite 代理）
+// - 生產環境（Vercel）：使用相對路徑 '/api'，會自動路由到 Vercel Serverless Function
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api' : '')
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
