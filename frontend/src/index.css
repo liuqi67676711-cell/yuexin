@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-background: #ffffff;
+  --color-foreground: #1a1a1a;
+  --color-card: #f8f9fa;
+  --color-border: #e5e7eb;
+}
+
+.dark {
+  --color-background: #0a0a0a;
+  --color-foreground: #f5f5f5;
+  --color-card: #1a1a1a;
+  --color-border: #2a2a2a;
+}
+
+/* 搜索框输入文字颜色 - 深黑色 */
+input[type="text"]:not([readonly]):not([disabled]) {
+  color: #000000 !important;
+}
+
+/* 深色模式下搜索框背景需要更亮以确保黑色文字可见 */
+.dark input[type="text"] {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  color: #000000 !important;
+}
+
+/* 渐变背景效果 */
+body.dark {
+  background: linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 50%, #0a0a1a 100%);
+  background-attachment: fixed;
+}
+
+/* 卡片玻璃态效果 */
+.glass-card {
+  background: rgba(26, 26, 26, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 渐变文字 */
+.gradient-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 淡入动画 */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-in-out;
+}
+
+/* AI 正在思考时的省略号动画 */
+@keyframes thinking-dots {
+  0%, 20% { opacity: 0.2; }
+  50% { opacity: 1; }
+  80%, 100% { opacity: 0.2; }
+}
+
+.animate-thinking-dots {
+  animation: thinking-dots 1.2s ease-in-out infinite;
+}
+
+/* 骨架屏呼吸动画 - 增强对比度便于感知 */
+@keyframes breathing {
+  0%, 100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.animate-breathing {
+  animation: breathing 2s ease-in-out infinite;
+}
+
+/* 按钮闪烁动画 - 吸引用户点击 */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* 柔和阴影 */
+.soft-shadow {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* 阿里进步体字体支持 */
+@font-face {
+  font-family: 'Alibaba PuHuiTi 2.0';
+  src: local('Alibaba PuHuiTi 2.0 55 Regular'), local('Alibaba PuHuiTi 2.0');
+  font-weight: normal;
+  font-style: normal;
+}
